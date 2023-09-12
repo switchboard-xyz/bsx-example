@@ -3,7 +3,7 @@
 <div align="center">
   <img src="https://github.com/switchboard-xyz/sbv2-core/raw/main/website/static/img/icons/switchboard/avatar.png" />
 
-  <h1>Switchboard<br>D2Y Function Example</h1>
+  <h1>Switchboard<br>BSX Function Example</h1>
 
   <p>
     <a href="https://discord.gg/switchboardxyz">
@@ -125,7 +125,7 @@ Build functions from the `switchboard-function/` directory with
 
 ```bash
 cd switchboard-function
-make docker_build
+make build
 ```
 
 ### Publishing and Initialization
@@ -143,8 +143,10 @@ Here, set the name of your container and deploy it using:
 cd switchboard-function
 export CONTAINER_NAME=your_docker_username/switchboard-function
 export EXAMPLE_PROGRAM=<RECEIVER_ADDRESS>
-make docker_publish
+make publish
 ```
+
+`NOTE: Make sure your docker build is publically readable`
 
 After this is published, you are free to make your function account to set the rate of run for the function.
 
@@ -156,7 +158,7 @@ You can use the Switchboard cli to bind this docker container to an on-chain rep
 export SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET=0xA3c9F9F6E40282e1366bdC01C1D30F7F7F58888e
 export QUEUE_ADDRESS=0x54f8A91bE5baAD3E2368b00A11bF4012EA6b031F # default testnet queue
 export MEASUREMENT=<YOUR CONTAINER MEASUREMENT>
-sb evm function create $QUEUE_ADDRESS --container ${CONTAINER_NAME} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "d2y_example" --fundAmount 0.025 --chain arbitrum --account /path/to/signer --network testnet --programId $SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET
+sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain arbitrum --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET?}
 ```
 
 ### Adding Funding to Function
@@ -291,15 +293,8 @@ We can't guarantee that the function will run on the blockchain, but we can test
 Run the following to test your function:
 
 ```bash
-export CHAIN_ID=12345 # can be any integer
-export FUNCTION_KEY=${FUNCTION_ID?} # can be any valid address
-export VERIFIER=${SWITCHBOARD_ADDRESS?} # can be any valid address
-export PAYER=${SWITCHBOARD_ADDRESS?} # can be any valid address
-export VERIFYING_CONTRACT=${SWITCHBOARD_ADDRESS?} # can be any valid address
-export REWARD_RECEIVER=${SWITCHBOARD_ADDRESS?} # can be any valid address
 export EXAMPLE_PROGRAM=${SWITCHBOARD_ADDRESS?} # can be any valid address
-cargo build
-cargo run # Note: this will include a warning about a missing quote which can be safely ignored.
+cargo test -- --nocapture # Note: this will include a warning about a missing quote which can be safely ignored.
 ```
 
 Successful output:
@@ -392,5 +387,3 @@ contract ReceiverExample is Recipient {
   }
 }
 ```
-# liquity-example
-# bsx-example
