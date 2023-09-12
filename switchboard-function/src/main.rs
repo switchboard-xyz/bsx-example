@@ -27,14 +27,6 @@ abigen!(
 );
 static DEFAULT_URL: &str = "https://goerli-rollup.arbitrum.io/rpc";
 
-pub fn kraken_twap(kraken_ohlc: &KrakenOHLCResponse, pair: &str, window: usize) -> Decimal {
-    let mut close_prices: Vec<Decimal> = kraken_ohlc.parse(pair).unwrap().iter().map(|x| x.close).collect();
-    close_prices.reverse();
-    let hour_prices = &close_prices[..window];
-    let avg: Decimal = hour_prices.iter().sum::<Decimal>() / Decimal::from(hour_prices.len());
-    avg
-}
-
 pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
     // --- Initialize clients ---
     let function_runner = EVMFunctionRunner::new()?;

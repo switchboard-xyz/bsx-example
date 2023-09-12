@@ -4,6 +4,15 @@ pub use switchboard_utils::reqwest;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
+
+pub fn kraken_twap(kraken_ohlc: &KrakenOHLCResponse, pair: &str, window: usize) -> Decimal {
+    let mut close_prices: Vec<Decimal> = kraken_ohlc.parse(pair).unwrap().iter().map(|x| x.close).collect();
+    close_prices.reverse();
+    let hour_prices = &close_prices[..window];
+    let avg: Decimal = hour_prices.iter().sum::<Decimal>() / Decimal::from(hour_prices.len());
+    avg
+}
+
 #[derive(Debug, Deserialize)]
 pub struct KrakenTickerResponse {
     pub result: HashMap<String, KrakenTickerInfo>,
