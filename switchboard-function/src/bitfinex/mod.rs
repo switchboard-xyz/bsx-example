@@ -1,6 +1,6 @@
 use rust_decimal::prelude::FromPrimitive;
-use serde::Deserialize;
 use rust_decimal::Decimal;
+use serde::Deserialize;
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -18,7 +18,10 @@ pub fn bitfinex_close_average(candles: &Vec<BitfinexCandle>) -> Decimal {
         return Decimal::ZERO;
     }
 
-    let sum: Decimal = candles.iter().map(|data| Decimal::from_f64(data.close).unwrap()).sum();
+    let sum: Decimal = candles
+        .iter()
+        .map(|data| Decimal::from_f64(data.close).unwrap())
+        .sum();
 
     let twap = sum / Decimal::from_usize(candles.len()).unwrap();
     twap

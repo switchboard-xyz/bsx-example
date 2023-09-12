@@ -1,7 +1,7 @@
-use chrono::{Utc, Duration};
-use serde::Deserialize;
-use rust_decimal::Decimal;
+
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
+use serde::Deserialize;
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
@@ -19,7 +19,10 @@ pub fn coinbase_close_average(candles: &Vec<CoinbaseCandle>) -> Decimal {
         return Decimal::ZERO;
     }
 
-    let sum: Decimal = candles.iter().map(|data| Decimal::from_f64(data.close).unwrap()).sum();
+    let sum: Decimal = candles
+        .iter()
+        .map(|data| Decimal::from_f64(data.close).unwrap())
+        .sum();
 
     let twap = sum / Decimal::from_usize(candles.len()).unwrap();
     twap

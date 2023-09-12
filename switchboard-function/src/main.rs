@@ -5,21 +5,17 @@ pub use coinbase::*;
 pub mod bitfinex;
 pub use bitfinex::*;
 
-use reqwest::Client;
-use serde_json::Value;
+use chrono::{Duration, Utc};
 use ethers::{
     prelude::{abigen, SignerMiddleware},
     providers::{Http, Provider},
     types::Address,
 };
-use hex;
-use serde::Deserialize;
+
+use reqwest::Client;
 use switchboard_evm;
 use switchboard_evm::sdk::EVMFunctionRunner;
 pub use switchboard_utils::reqwest;
-use rust_decimal::Decimal;
-use std::time::Instant;
-use chrono::{Utc, Duration};
 
 abigen!(
     Receiver,
@@ -34,7 +30,7 @@ pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
     let provider = Provider::<Http>::try_from(DEFAULT_URL)?;
     let signer = function_runner.enclave_wallet.clone();
     let client = SignerMiddleware::new_with_provider_chain(provider, signer).await?;
-    let receiver_contract = Receiver::new(receiver, client.into());
+    let _receiver_contract = Receiver::new(receiver, client.into());
 
     // --- Logic Below ---
     // DERIVE CUSTOM SWITCHBOARD PRICE
@@ -54,16 +50,19 @@ pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
         end_time.to_rfc3339()
     );
     let client = Client::new();
-    let coinbase_ohlc: Vec<CoinbaseCandle> = client.get(coinbase_url)
+    let coinbase_ohlc: Vec<CoinbaseCandle> = client
+        .get(coinbase_url)
         .header("User-Agent", "null")
         .send()
         .await?
-        .json().await?;
+        .json()
+        .await?;
     let coinbase_twap = coinbase_close_average(&coinbase_ohlc);
 
-
-
-    println!("BTC 1h TWAP: Kraken: {:?} Bitfinex: {:?} Coinbase: {:?}", kraken_twap, bitfinex_twap, coinbase_twap);
+    println!(
+        "BTC 1h TWAP: Kraken: {:?} Bitfinex: {:?} Coinbase: {:?}",
+        kraken_twap, bitfinex_twap, coinbase_twap
+    );
     Ok(())
 }
 
