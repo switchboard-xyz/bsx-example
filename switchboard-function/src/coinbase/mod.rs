@@ -14,7 +14,7 @@ pub struct CoinbaseCandle {
     volume: f64,
 }
 
-pub fn coinbase_close_average(candles: &Vec<CoinbaseCandle>) -> Decimal {
+pub fn coinbase_close_average(candles: &[CoinbaseCandle]) -> Decimal {
     if candles.len() == 0 {
         return Decimal::ZERO;
     }

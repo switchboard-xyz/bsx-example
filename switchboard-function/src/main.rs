@@ -5,7 +5,7 @@ pub use coinbase::*;
 pub mod bitfinex;
 pub use bitfinex::*;
 
-use chrono::{Duration, Utc};
+use chrono::{Utc};
 use ethers::{
     prelude::{abigen, SignerMiddleware},
     providers::{Http, Provider},
@@ -16,21 +16,23 @@ use reqwest::Client;
 use switchboard_evm;
 use switchboard_evm::sdk::EVMFunctionRunner;
 pub use switchboard_utils::reqwest;
+use std::time::Instant;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 abigen!(
     Receiver,
-    r#"[ function callback(uint256[], address[], bytes32[], bytes[]) ]"#,
+    r#"[ function callback(uint256) ]"#,
 );
 static DEFAULT_URL: &str = "https://goerli-rollup.arbitrum.io/rpc";
 
-pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn perform() -> Result<()> {
     // --- Initialize clients ---
     let function_runner = EVMFunctionRunner::new()?;
     let receiver: Address = env!("EXAMPLE_PROGRAM").parse()?;
     let provider = Provider::<Http>::try_from(DEFAULT_URL)?;
     let signer = function_runner.enclave_wallet.clone();
     let client = SignerMiddleware::new_with_provider_chain(provider, signer).await?;
-    let _receiver_contract = Receiver::new(receiver, client.into());
+    let receiver_contract = Receiver::new(receiver, client.into());
 
     // --- Logic Below ---
     // DERIVE CUSTOM SWITCHBOARD PRICE
@@ -42,13 +44,7 @@ pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
     let bitfinex_ohlc: Vec<BitfinexCandle> = reqwest::get(bitfinex_url).await?.json().await?;
     let bitfinex_twap = bitfinex_close_average(&bitfinex_ohlc);
 
-    let end_time = Utc::now();
-    let start_time = end_time - Duration::minutes(60);
-    let coinbase_url = format!(
-        "https://api.pro.coinbase.com/products/BTC-USD/candles?granularity=60&start={}&end={}",
-        start_time.to_rfc3339(),
-        end_time.to_rfc3339()
-    );
+    let coinbase_url = "https://api.pro.coinbase.com/products/BTC-USD/candles?granularity=60";
     let client = Client::new();
     let coinbase_ohlc: Vec<CoinbaseCandle> = client
         .get(coinbase_url)
@@ -57,17 +53,27 @@ pub async fn perform() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .json()
         .await?;
-    let coinbase_twap = coinbase_close_average(&coinbase_ohlc);
+    let coinbase_twap = coinbase_close_average(&coinbase_ohlc[..60]);
 
     println!(
         "BTC 1h TWAP: Kraken: {:?} Bitfinex: {:?} Coinbase: {:?}",
         kraken_twap, bitfinex_twap, coinbase_twap
     );
+    let mut twaps = vec![kraken_twap, bitfinex_twap, coinbase_twap];
+    twaps.sort();
+    let mut lower_bound_median = twaps[twaps.len() / 2];
+    lower_bound_median.rescale(8);
+
+    // --- Send the callback to the contract with Switchboard verification ---
+    let callback = receiver_contract.callback(lower_bound_median.mantissa().into());
+    let expiration = (Utc::now().timestamp() + 120).into();
+    let gas_limit = 5_500_000.into();
+    function_runner.emit(receiver, expiration, gas_limit, vec![callback])?;
     Ok(())
 }
 
 #[tokio::main(worker_threads = 12)]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     perform().await?;
     Ok(())
 }
@@ -78,7 +84,7 @@ mod tests {
     use crate::*;
 
     #[tokio::test]
-    async fn test() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test() -> Result<()> {
         let start = Instant::now();
         switchboard_evm::test::init_test_runtime();
         perform().await?;
