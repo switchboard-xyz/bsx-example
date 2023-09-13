@@ -206,7 +206,7 @@ futures = "0.3"
 
 # at a minimum you'll need to include the following packages
 ethers = { version = "2.0.7", features = ["legacy"] }
-switchboard-evm = "0.3.9"
+switchboard-evm = "0.3.21"
 ```
 
 ### Minimal Switchboard Function
@@ -225,68 +225,35 @@ use std::time::{SystemTime, Duration};
 use switchboard_evm::{
     sdk::{EVMFunctionRunner, EVMMiddleware},
 };
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+// define the abi for the functions in the contract you'll be calling
+// -- here it's just a function named "callback", expecting a random u256
+abigen!(
+    Receiver,
+    r#"[
+        function callback(uint256)
+    ]"#,
+);
 
 #[tokio::main(worker_threads = 12)]
-async fn main() {
-
-    // define the abi for the functions in the contract you'll be calling
-    // -- here it's just a function named "callback", expecting a random u256
-    abigen!(
-        Receiver,
-        r#"[
-            function callback(uint256)
-        ]"#,
-    );
-
-    // Generates a new enclave wallet, pulls in relevant environment variables
-    let function_runner = EVMFunctionRunner::new().unwrap();
-
-    // set the gas limit and expiration date
-    let gas_limit = 1000000;
-    let expiration_time_seconds = 60;
-    let current_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_secs() + 64;
-
-
-    // create a client, wallet and middleware. This is just so we can create the contract instance and sign the txn.
-    // @TODO: update the provider to whichever network you're using
-    let provider = Provider::<Http>::try_from("https://goerli-rollup.arbitrum.io/rpc").unwrap();
-    let client = Arc::new(
-        SignerMiddleware::new_with_provider_chain(provider.clone(), function_runner.enclave_wallet.clone())
-            .await
-            .unwrap(),
-    );
-
-    // @TODO: your target contract address here
-    // In the push receiver example this is set via environment variable
-    let contract_address = "0x1cEA45f047FEa89887B79ce28723852f288eE09B"
-        .parse::<ethers::types::Address>()
-        .unwrap();
-    let receiver_contract = Receiver::new(contract_address, client);
-
-    // generate a random number U256
+async fn main() -> Result<()> {
+    // generate a random number U256. The sgx runtime will source this randomness
+    // securely from the enclave.
     let random: [u64; 4] = rand::random();
     let random = U256(random);
 
-    // call function
-    let contract_fn_call: ContractCall<EVMMiddleware<_>, _> =
-        receiver_contract.callback(random);
-
-    // create a vec of contract calls to pass to the function runner
-    let calls = vec![contract_fn_call.clone()];
-
-    // Emit the result
-    // This will encode and sent the function data and run them as metatransactions
-    // (in a single-tx) originating from the switchboard contract with the functionId encoded as the sender
-    // https://eips.ethereum.org/EIPS/eip-2771
-    function_runner.emit(
-        contract_address,
-        current_time.try_into().unwrap(),
-        gas_limit.into(),
-        calls,
-    ).unwrap();
+    let function_runner = EVMFunctionRunner::new()?;
+    let receiver: Address = env!("EXAMPLE_PROGRAM").parse()?;
+    let provider = Provider::<Http>::try_from(DEFAULT_URL)?;
+    let signer = function_runner.enclave_wallet.clone();
+    let client = SignerMiddleware::new_with_provider_chain(provider, signer).await?;
+    let receiver_contract = Receiver::new(receiver, client.into());
+    // --- Send the callback to the contract with Switchboard verification ---
+    let callback = receiver_contract.callback(lower_bound_median.mantissa().into());
+    let expiration = (Utc::now().timestamp() + 120).into();
+    let gas_limit = 5_500_000.into();
+    function_runner.emit(receiver, expiration, gas_limit, vec![callback])?;
 }
 ```
 
@@ -324,36 +291,7 @@ In order to do this you'll need to know the switchboard address you're using, an
 
 Recipient.sol
 
-```sol
-//SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
-
-// EIP2771 Context
-// Inherited by all contracts that are recipients of switchboard callbacks
-contract Recipient {
-  address immutable switchboard;
-
-  constructor(address _switchboard) {
-    switchboard = _switchboard;
-  }
-
-  // get the encoded sender if this message is coming from the switchboard contract
-  // if things are working as intended, the sender will be the functionId
-
-  function getEncodedFunctionId() internal view returns (address payable signer) {
-    signer = payable(msg.sender);
-    if (msg.data.length >= 20 && signer == switchboard) {
-      assembly {
-        signer := shr(96, calldataload(sub(calldatasize(), 20)))
-      }
-    }
-  }
-}
-```
-
-Example.sol
-
-```sol
+```solidity
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 

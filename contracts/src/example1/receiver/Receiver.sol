@@ -1,11 +1,9 @@
-//SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
 import {ReceiverLib} from "./ReceiverLib.sol";
 import {AdminLib} from "../admin/AdminLib.sol";
 import {ErrorLib} from "../error/ErrorLib.sol";
 
-// Get the Switchboard Library - this is the Core Mainnet Deployment, you can swap this for one of the networks below
 import {Switchboard} from "@switchboard-xyz/evm.js/contracts/arbitrum/testnet/Switchboard.sol";
 
 contract Receiver {
