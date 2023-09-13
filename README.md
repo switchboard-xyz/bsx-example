@@ -86,6 +86,10 @@ sb evm function --help
 
 ## Components
 
+### Notable files
+- When looking contract side, the heart of the example code lives in https://github.com/switchboard-xyz/bsx-example/blob/main/contracts/src/example1/receiver/Receiver.sol
+- When looking function side, the portion to focus on lives in https://github.com/switchboard-xyz/bsx-example/blob/main/switchboard-function/src/main.rs
+
 ### Contract
 
 This example contract acts as the ingestor of the switchboard-function in this directory to fetch implied volatility parameters via deribit. The example contract is an example of the [ERC2535 diamond contract pattern](https://autifynetwork.com/exploring-erc-2535-the-diamond-standard-for-smart-contracts/) so it can be extended and upgraded for your needs.
