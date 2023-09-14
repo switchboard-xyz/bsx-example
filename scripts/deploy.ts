@@ -8,6 +8,7 @@ import { DiamondCutFacet } from "../typechain-types";
 import { getSelectors, FacetCutAction } from "./diamond";
 
 export async function deployDiamond() {
+  const fees = await ethers.provider.getFeeData();
   const accounts = await ethers.getSigners();
   const contractOwner = accounts[0];
 
@@ -29,7 +30,9 @@ export async function deployDiamond() {
     defaultCutAction = FacetCutAction.Add;
     // deploy DiamondCutFacet
     const DiamondCutFacet = await ethers.getContractFactory("DiamondCutFacet");
-    const diamondCutFacet = await DiamondCutFacet.deploy();
+    const diamondCutFacet = await DiamondCutFacet.deploy({
+      gasPrice: fees.gasPrice.mul(2),
+    });
     await diamondCutFacet.deployed();
     console.log("DiamondCutFacet deployed:", diamondCutFacet.address);
 
@@ -37,7 +40,8 @@ export async function deployDiamond() {
     const Diamond = await ethers.getContractFactory("Diamond");
     const diamond = await Diamond.deploy(
       contractOwner.address,
-      diamondCutFacet.address
+      diamondCutFacet.address,
+      { gasPrice: fees.gasPrice.mul(2) }
     );
     await diamond.deployed();
     console.log(
@@ -52,7 +56,9 @@ export async function deployDiamond() {
   // DiamondInit provides a function that is called when the diamond is upgraded to initialize state variables
   // Read about how the diamondCut function works here: https://eips.ethereum.org/EIPS/eip-2535#addingreplacingremoving-functions
   const DiamondInit = await ethers.getContractFactory("DiamondInit");
-  const diamondInit = await DiamondInit.deploy();
+  const diamondInit = await DiamondInit.deploy({
+    gasPrice: fees.gasPrice.mul(2),
+  });
   await diamondInit.deployed();
   console.log("DiamondInit deployed:", diamondInit.address);
 
@@ -68,7 +74,7 @@ export async function deployDiamond() {
   const cut = [];
   for (const [facetName, modifyMode] of FacetNames) {
     const Facet = await ethers.getContractFactory(facetName as string);
-    const facet = await Facet.deploy();
+    const facet = await Facet.deploy({ gasPrice: fees.gasPrice.mul(2) });
     await facet.deployed();
     console.log(`${facetName} deployed: ${facet.address}`);
     cut.push({
@@ -89,7 +95,9 @@ export async function deployDiamond() {
   let receipt: ContractReceipt;
   // call to init function
   let functionCall = diamondInit.interface.encodeFunctionData("init");
-  tx = await diamondCut.diamondCut(cut, diamondInit.address, functionCall);
+  tx = await diamondCut.diamondCut(cut, diamondInit.address, functionCall, {
+    gasPrice: fees.gasPrice.mul(2),
+  });
   console.log("Diamond cut tx: ", tx.hash);
   receipt = await tx.wait();
 
@@ -99,7 +107,9 @@ export async function deployDiamond() {
     const switchboard = await sb.deployed();
     const isInitialized = await switchboard.isAdmin(contractOwner.address);
     if (!isInitialized) {
-      const tx = await switchboard.initialize(switchboardAddress);
+      const tx = await switchboard.initialize(switchboardAddress, {
+        gasPrice: fees.gasPrice.mul(2),
+      });
       await tx.wait();
       console.log("Initialized Admin", contractOwner.address);
     } else {

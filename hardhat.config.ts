@@ -479,7 +479,7 @@ const config: HardhatUserConfig = {
     },
     baseTestnet: {
       chainId: 84531,
-      url: process.env.BASE_TESTNET_URL || "",
+      url: process.env.BASE_TESTNET_URL || "https://goerli.base.org",
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
