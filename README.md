@@ -159,7 +159,7 @@ You can use the Switchboard cli to bind this docker container to an on-chain rep
 export SWITCHBOARD_ADDRESS_TESTNET=0x9640b33Ef3CB1a8b1f943Fb20FB6ff70d5F4DE96
 export QUEUE_ADDRESS=0x80391284b2C81a2E11696EFb8825412c8D0d2a4d # default testnet queue
 export MEASUREMENT=<YOUR CONTAINER MEASUREMENT>
-sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain arbitrum --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET?}
+sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain base --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_TESTNET?}
 ```
 
 ### Adding Funding to Function
