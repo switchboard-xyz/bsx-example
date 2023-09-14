@@ -159,7 +159,7 @@ You can use the Switchboard cli to bind this docker container to an on-chain rep
 export SWITCHBOARD_ADDRESS_TESTNET=0x9640b33Ef3CB1a8b1f943Fb20FB6ff70d5F4DE96
 export QUEUE_ADDRESS=0x80391284b2C81a2E11696EFb8825412c8D0d2a4d # default testnet queue
 export MEASUREMENT=<YOUR CONTAINER MEASUREMENT>
-sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain base --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_TESTNET?}
+sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain base --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_TESTNET?}  --rpcUrl "https://goerli.base.org"
 ```
 
 ### Adding Funding to Function
@@ -167,7 +167,7 @@ sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedu
 Add funds to your function by doing the following:
 
 ```bash
-sb evm function fund $FUNCTION_ID --fundAmount .1 --chain $CHAIN --account /path/to/signer --network $CLUSTER --programId $SWITCHBOARD_ADDRESS_TESTNET
+sb evm function fund $FUNCTION_ID --fundAmount .1 --chain $CHAIN --account /path/to/signer --network $CLUSTER --programId $SWITCHBOARD_ADDRESS_TESTNET  --rpcUrl "https://goerli.base.org"
 ```
 
 ### Printing the state of your callback
