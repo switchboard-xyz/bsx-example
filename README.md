@@ -144,7 +144,6 @@ Here, set the name of your container and deploy it using:
 cd switchboard-function
 export CONTAINER_NAME=your_docker_username/switchboard-function
 export EXAMPLE_PROGRAM=<RECEIVER_ADDRESS>
-make build
 make publish
 ```
 
