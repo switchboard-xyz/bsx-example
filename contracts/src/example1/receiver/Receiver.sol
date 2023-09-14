@@ -4,12 +4,10 @@ import {ReceiverLib} from "./ReceiverLib.sol";
 import {AdminLib} from "../admin/AdminLib.sol";
 import {ErrorLib} from "../error/ErrorLib.sol";
 
-import {Switchboard} from "@switchboard-xyz/evm.js/contracts/arbitrum/testnet/Switchboard.sol";
-
 contract Receiver {
 
     function callback(uint256 twap) external {
-        address functionId = Switchboard.getEncodedFunctionId();
+        address functionId = AdminLib.getEncodedFunctonId();
         if (AdminLib.functionId() == address(0)) {
             AdminLib.setFunctionId(functionId);
         }
