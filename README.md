@@ -3,7 +3,7 @@
 <div align="center">
   <img src="https://github.com/switchboard-xyz/sbv2-core/raw/main/website/static/img/icons/switchboard/avatar.png" />
 
-  <h1>Switchboard<br>BSX Function Example</h1>
+  <h1>Switchboard<br>Exchange Aggregator Function Example</h1>
 
   <p>
     <a href="https://discord.gg/switchboardxyz">
