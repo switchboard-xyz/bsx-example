@@ -11,11 +11,14 @@ export async function deployDiamond() {
   const fees = await ethers.provider.getFeeData();
   const accounts = await ethers.getSigners();
   const contractOwner = accounts[0];
+  const deployer = contractOwner;
+  console.log("Account:", deployer.address);
+  console.log("Account balance:", (await deployer.getBalance()).toString());
 
   let switchboardAddress =
     process.env.SWITCHBOARD_ADDRESS ?? process.env.DIAMOND_ADDRESS ?? "";
 
-  let diamondAddress = process.env.EXAMPLE_PROGRAM ?? "";
+  let diamondAddress = process.env.SWITCHBOARD_PUSH_ADDRESS ?? "";
 
   if (!switchboardAddress) {
     throw new Error(
@@ -26,12 +29,12 @@ export async function deployDiamond() {
   let defaultCutAction = FacetCutAction.Replace;
 
   if (diamondAddress.length === 0) {
-    console.log("INITIALIZING NEW CONTRACT");
+    console.log("INITIALIZING NEW SWITCHBOARD PUSH CONTRACT");
     defaultCutAction = FacetCutAction.Add;
     // deploy DiamondCutFacet
     const DiamondCutFacet = await ethers.getContractFactory("DiamondCutFacet");
     const diamondCutFacet = await DiamondCutFacet.deploy({
-      gasPrice: fees.gasPrice.mul(2),
+      gasPrice: fees.gasPrice.mul(1),
     });
     await diamondCutFacet.deployed();
     console.log("DiamondCutFacet deployed:", diamondCutFacet.address);
@@ -41,11 +44,11 @@ export async function deployDiamond() {
     const diamond = await Diamond.deploy(
       contractOwner.address,
       diamondCutFacet.address,
-      { gasPrice: fees.gasPrice.mul(2) }
+      { gasPrice: fees.gasPrice.mul(1) }
     );
     await diamond.deployed();
     console.log(
-      `Diamond deployed, please run \nexport EXAMPLE_PROGRAM=${diamond.address}`
+      `Diamond deployed, please run \nexport SWITCHBOARD_PUSH_ADDRESS=${diamond.address}`
     );
     diamondAddress = diamond.address;
   } else {
@@ -57,7 +60,7 @@ export async function deployDiamond() {
   // Read about how the diamondCut function works here: https://eips.ethereum.org/EIPS/eip-2535#addingreplacingremoving-functions
   const DiamondInit = await ethers.getContractFactory("DiamondInit");
   const diamondInit = await DiamondInit.deploy({
-    gasPrice: fees.gasPrice.mul(2),
+    gasPrice: fees.gasPrice.mul(1),
   });
   await diamondInit.deployed();
   console.log("DiamondInit deployed:", diamondInit.address);
@@ -74,7 +77,7 @@ export async function deployDiamond() {
   const cut = [];
   for (const [facetName, modifyMode] of FacetNames) {
     const Facet = await ethers.getContractFactory(facetName as string);
-    const facet = await Facet.deploy({ gasPrice: fees.gasPrice.mul(2) });
+    const facet = await Facet.deploy({ gasPrice: fees.gasPrice.mul(1) });
     await facet.deployed();
     console.log(`${facetName} deployed: ${facet.address}`);
     cut.push({
@@ -96,7 +99,7 @@ export async function deployDiamond() {
   // call to init function
   let functionCall = diamondInit.interface.encodeFunctionData("init");
   tx = await diamondCut.diamondCut(cut, diamondInit.address, functionCall, {
-    gasPrice: fees.gasPrice.mul(2),
+    gasPrice: fees.gasPrice.mul(1),
   });
   console.log("Diamond cut tx: ", tx.hash);
   receipt = await tx.wait();
@@ -108,7 +111,7 @@ export async function deployDiamond() {
     const isInitialized = await switchboard.isAdmin(contractOwner.address);
     if (!isInitialized) {
       const tx = await switchboard.initialize(switchboardAddress, {
-        gasPrice: fees.gasPrice.mul(2),
+        gasPrice: fees.gasPrice.mul(1),
       });
       await tx.wait();
       console.log("Initialized Admin", contractOwner.address);
@@ -124,7 +127,7 @@ export async function deployDiamond() {
   }
 
   console.log("Completed diamond cut");
-  console.log(`export EXAMPLE_PROGRAM=${diamondAddress}`);
+  console.log(`export SWITCHBOARD_PUSH_ADDRESS=${diamondAddress}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

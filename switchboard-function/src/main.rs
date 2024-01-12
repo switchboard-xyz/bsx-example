@@ -1,97 +1,155 @@
-pub mod kraken;
-pub use kraken::*;
-pub mod coinbase;
-pub use coinbase::*;
-pub mod bitfinex;
-pub use bitfinex::*;
-
-use chrono::{Utc};
+mod exchange_api;
+pub use exchange_api::*;
 use ethers::{
     prelude::{abigen, SignerMiddleware},
     providers::{Http, Provider},
-    types::Address,
+    types::I256,
 };
+use rand;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
+use reqwest::Error;
+use rust_decimal::prelude::*;
+use rust_decimal::Decimal;
+use std::collections::HashMap;
+use std::time::SystemTime;
+use std::result::Result;
+use switchboard_common;
+use switchboard_common::SbFunctionError;
+use switchboard_evm::*;
+use switchboard_evm::sdk::EvmFunctionRunner;
 
-use reqwest::Client;
-use switchboard_evm;
-use switchboard_evm::sdk::EVMFunctionRunner;
-pub use switchboard_utils::reqwest;
-use std::time::Instant;
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+// define the abi for the callback
+// -- here it's just a function named "callback", expecting the feed names, values, and timestamps
+// -- we also include a view function for getting all feeds
+// running `npx hardhat typechain` will create artifacts for the contract
+// this in particular is found at
+// SwitchboardPushReceiver/artifacts/contracts/src/SwitchboardPushReceiver/Receiver/Receiver.sol/Receiver.json
+abigen!(Receiver, "./src/abi/Receiver.json",);
 
-abigen!(
-    Receiver,
-    r#"[ function callback(uint256) ]"#,
-);
-static DEFAULT_URL: &str = "https://goerli-rollup.arbitrum.io/rpc";
+static CLIENT_URL: &str = "https://goerli.optimism.io";
+static RECEIVER: &str = env!("SWITCHBOARD_PUSH_ADDRESS");
 
-pub async fn perform() -> Result<()> {
-    // --- Initialize clients ---
-    let function_runner = EVMFunctionRunner::new()?;
-    let receiver: Address = env!("EXAMPLE_PROGRAM").parse()?;
-    let provider = Provider::<Http>::try_from(DEFAULT_URL)?;
-    let signer = function_runner.enclave_wallet.clone();
-    let client = SignerMiddleware::new_with_provider_chain(provider, signer).await?;
+#[sb_error]
+enum SbError {
+    ParseError = 1,
+    FetchError,
+}
+
+// Define the Switchboard Function - resulting in a vector of tx's to be sent to the contract
+#[sb_function(expiration_seconds = 120, gas_limit = 5_500_000)]
+async fn sb_function(
+    client: SbMiddleware,
+    _: Address,
+    _: NoParams,
+) -> Result<Vec<FnCall>, SbError> {
+
+    // get the receiver contract
+    let receiver: Address = RECEIVER.parse().map_err(|_| SbError::ParseError)?;
     let receiver_contract = Receiver::new(receiver, client.into());
 
-    // --- Logic Below ---
-    // DERIVE CUSTOM SWITCHBOARD PRICE
-    let kraken_url = "https://api.kraken.com/0/public/OHLC?pair=BTCUSD&interval=1";
-    let kraken_ohlc: KrakenOHLCResponse = reqwest::get(kraken_url).await?.json().await?;
-    let kraken_twap = kraken_twap(&kraken_ohlc, "XXBTZUSD", 60);
+    // get time in seconds
+    let current_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
-    let bitfinex_url = "https://api-pub.bitfinex.com/v2/candles/trade:1m:tBTCUSD/hist?limit=60";
-    let bitfinex_ohlc: Vec<BitfinexCandle> = reqwest::get(bitfinex_url).await?.json().await?;
-    let bitfinex_twap = bitfinex_close_average(&bitfinex_ohlc);
+    // get all feeds
+    let feeds = receiver_contract.get_all_feeds().call().await.unwrap();
 
-    let coinbase_url = "https://api.pro.coinbase.com/products/BTC-USD/candles?granularity=60";
-    let client = Client::new();
-    let coinbase_ohlc: Vec<CoinbaseCandle> = client
-        .get(coinbase_url)
-        .header("User-Agent", "null")
-        .send()
-        .await?
-        .json()
-        .await?;
-    let coinbase_twap = coinbase_close_average(&coinbase_ohlc[..60]);
 
-    println!(
-        "BTC 1h TWAP: Kraken: {:?} Bitfinex: {:?} Coinbase: {:?}",
-        kraken_twap, bitfinex_twap, coinbase_twap
-    );
-    let mut twaps = vec![kraken_twap, bitfinex_twap, coinbase_twap];
-    twaps.sort();
-    let mut lower_bound_median = twaps[twaps.len() / 2];
-    lower_bound_median.rescale(8);
+    // take feed.feed_name and map it to feed.latest_result
+    let mut feed_map = HashMap::<[u8; 32], I256>::new();
+    for feed in feeds {
+        feed_map.insert(feed.feed_name, feed.latest_result.value);
+    }
 
-    // --- Send the callback to the contract with Switchboard verification ---
-    let callback = receiver_contract.callback(lower_bound_median.mantissa().into());
-    let expiration = (Utc::now().timestamp() + 120).into();
-    let gas_limit = 5_500_000.into();
-    function_runner.emit(receiver, expiration, gas_limit, vec![callback])?;
-    Ok(())
+    // get fresh feed data
+    let mut feed_updates = get_feed_data().await;
+
+    // check if we're still registering feeds (significantly more expensive in gas cost)
+    // -- if so, only use the first 20 elements of the feed_updates
+    // allow up to 1 registration alongside updates so we don't block updates for an entire run if a feed is added
+    let registering_feeds: bool = feed_map.len() < feed_updates.len() - 1;
+
+    // get list of feed names that weren't received in get_feed_data
+    let mut missing_feeds = Vec::<[u8; 32]>::new();
+    for key in feed_map.keys() {
+        // add if the feed_updates doesn't contain the key and length < 10
+        if !feed_updates.contains_key(key) && missing_feeds.len() < 10 {
+            missing_feeds.push(*key);
+        }
+    }
+
+    // delete all entries with a diff less than 0.1
+    for (key, value) in feed_updates.clone() {
+        if feed_map.contains_key(&key) {
+            let diff = get_percentage_diff(*feed_map.get(&key).unwrap(), value);
+            // %0.01 diff should triger an update
+            if registering_feeds || diff < Decimal::from_str("0.1").unwrap() {
+                feed_updates.remove(&key);
+            }
+        }
+    }
+
+    // get a vec of feed names and values remaining
+    let mut feed_names = Vec::<[u8; 32]>::new();
+    let mut feed_values = Vec::<I256>::new();
+
+    // setup feeds for shuffling
+    let mut randomness = [0; 32];
+    Gramine::read_rand(&mut randomness).unwrap();
+    let mut rng = rand::rngs::StdRng::from_seed(randomness);
+    let mut feed_updates: Vec<([u8; 32], I256)> = feed_updates.into_iter().collect();
+
+    // only shuffle feeds if we're at the stage where we're submitting results
+    if !registering_feeds {
+        feed_updates.shuffle(&mut rng);
+    }
+
+    for (key, value) in feed_updates {
+        
+        // only use the first 30 elements of the feed_updates
+        // -- this is to prevent the transaction from going over the gas limit
+        if feed_names.len() >= 20 && registering_feeds {
+            break;
+        }
+        if feed_names.len() >= 50 && !registering_feeds {
+            break;
+        }
+        feed_names.push(key);
+        feed_values.push(value);
+    }
+
+    // send the callback to the contract
+    let callback =
+        receiver_contract.callback(feed_names.clone(), feed_values.clone(), current_time.into());
+
+    // get the calls from the output results
+    let mut callbacks = vec![callback];
+
+    // add the missing feeds to the callback to mark them as stale
+    if !registering_feeds && missing_feeds.len() > 0 {
+        let callback_missing_feeds = receiver_contract.failure_callback(missing_feeds.clone());
+        callbacks.push(callback_missing_feeds);
+    }
+
+    // Return the Vec of callbacks to be run by the Switchboard Function on-chain
+    Ok(callbacks)
 }
 
-#[tokio::main(worker_threads = 12)]
-async fn main() -> Result<()> {
-    perform().await?;
-    Ok(())
+fn get_percentage_diff(a: I256, b: I256) -> Decimal {
+    let a = Decimal::from(a.as_i128());
+    let b = Decimal::from(b.as_i128());
+    (Decimal::min(a, b) / Decimal::max(a, b)).abs()
 }
 
-/// Run `cargo test -- --nocapture`
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     #[tokio::test]
-    async fn test() -> Result<()> {
-        let start = Instant::now();
-        switchboard_evm::test::init_test_runtime();
-        perform().await?;
-        let duration = start.elapsed().as_secs();
-        if duration > 5 {
-            println!("Warning: your function takes excessive runtime. Oracles may opt to kill your function before completion");
-        }
-        Ok(())
+    async fn test() {
+
     }
 }

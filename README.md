@@ -2,9 +2,7 @@
 
 <div align="center">
   <img src="https://github.com/switchboard-xyz/sbv2-core/raw/main/website/static/img/icons/switchboard/avatar.png" />
-
   <h1>Switchboard<br>Exchange Aggregator Function Example</h1>
-
   <p>
     <a href="https://discord.gg/switchboardxyz">
       <img alt="Discord" src="https://img.shields.io/discord/841525135311634443?color=blueviolet&logo=discord&logoColor=white" />
@@ -80,32 +78,31 @@ pnpm i
 ### Install Switchboard cli
 
 ```bash
-npm i -g @switchboard-xyz/cli@latest
+pnpm i -g @switchboard-xyz/cli@latest
 sb evm function --help
 ```
 
 ## Components
 
-### Notable files
-- When looking contract side, the heart of the example code lives in https://github.com/switchboard-xyz/bsx-example/blob/main/contracts/src/example1/receiver/Receiver.sol
-- When looking function side, the portion to focus on lives in https://github.com/switchboard-xyz/bsx-example/blob/main/switchboard-function/src/main.rs
-
 ### Contract
 
-This example contract acts as the ingestor of the switchboard-function in this directory to fetch implied volatility parameters via deribit. The example contract is an example of the [ERC2535 diamond contract pattern](https://autifynetwork.com/exploring-erc-2535-the-diamond-standard-for-smart-contracts/) so it can be extended and upgraded for your needs.
+This example contract acts as the ingester of the switchboard-function in this directory to fetch implied volatility parameters via deribit. The example contract is an example of the [ERC2535 diamond contract pattern](https://autifynetwork.com/exploring-erc-2535-the-diamond-standard-for-smart-contracts/) so it can be extended and upgraded for your needs.
 
 When you deploy this contract, it will await to be bound to a switchboard function calling into it.
 
 #### Picking a network and setting up your environment
 
 - set the `SWITCHBOARD_ADDRESS` env variable to target whichever address is appropriate for the network you're targeting
-- for base testnet, this is: `0x9640b33Ef3CB1a8b1f943Fb20FB6ff70d5F4DE96`
+- for arbitrum testnet, this is: `0xA3c9F9F6E40282e1366bdC01C1D30F7F7F58888e`
 
 To first deploy the contract, run:
 
 ```bash
 # ex:
-pnpm deploy:basetestnet
+# pnpm deploy:coredaotestnet
+# pnpm deploy:coredaomain
+# pnpm deploy:arbitrumtestnet
+pnpm deploy:${NETWORK_NAME}
 ```
 
 More deploy commands are available in [package.json](./package.json) scripts.
@@ -113,7 +110,7 @@ More deploy commands are available in [package.json](./package.json) scripts.
 You will see the last line of this script output
 
 ```bash
-export EXAMPLE_PROGRAM=<RECEIVER_ADDRESS>
+export CALLBACK_ADDRESS=<RECEIVER_ADDRESS>
 ```
 
 ### Switchboard Function
@@ -135,7 +132,7 @@ You'll also need to pick a container name that your switchboard function will us
 
 ```bash
 export CONTAINER_NAME=your_docker_username/switchboard-function
-export EXAMPLE_PROGRAM=<RECEIVER_ADDRESS>
+export CALLBACK_ADDRESS=<RECEIVER_ADDRESS>
 ```
 
 Here, set the name of your container and deploy it using:
@@ -143,31 +140,31 @@ Here, set the name of your container and deploy it using:
 ```bash
 cd switchboard-function
 export CONTAINER_NAME=your_docker_username/switchboard-function
-export EXAMPLE_PROGRAM=<RECEIVER_ADDRESS>
+export CALLBACK_ADDRESS=<RECEIVER_ADDRESS>
 make publish
 ```
 
-`NOTE: Make sure your docker build is publically readable`
+Common gotcha: make sure this published container is publically visible
 
 After this is published, you are free to make your function account to set the rate of run for the function.
+
+You'll also need to create a file with your private key in it. This is used to sign the transactions that will be sent to the switchboard contract.
 
 ### Initializing the function
 
 You can use the Switchboard cli to bind this docker container to an on-chain representation:
 
 ```bash
-export SWITCHBOARD_ADDRESS_TESTNET=0x9640b33Ef3CB1a8b1f943Fb20FB6ff70d5F4DE96
-export QUEUE_ADDRESS=0x80391284b2C81a2E11696EFb8825412c8D0d2a4d # default testnet queue
+export SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET=0xA3c9F9F6E40282e1366bdC01C1D30F7F7F58888e
+export QUEUE_ID=0x54f8A91bE5baAD3E2368b00A11bF4012EA6b031F # default testnet queue
 export MEASUREMENT=<YOUR CONTAINER MEASUREMENT>
-sb evm function create ${QUEUE_ADDRESS?} --container ${CONTAINER_NAME?} --schedule "*/30 * * * * *" --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "BSX_example" --fundAmount 0.025 --chain base --account /path/to/signer --network testnet --programId ${SWITCHBOARD_ADDRESS_TESTNET?}  --rpcUrl "https://goerli.base.org"
-```
-
-### Adding Funding to Function
-
-Add funds to your function by doing the following:
-
-```bash
-sb evm function fund $FUNCTION_ID --fundAmount .1 --chain $CHAIN --account /path/to/signer --network $CLUSTER --programId $SWITCHBOARD_ADDRESS_TESTNET  --rpcUrl "https://goerli.base.org"
+sb evm function create $QUEUE_ID --container ${CONTAINER_NAME} --containerRegistry dockerhub  --mrEnclave ${MEASUREMENT?} --name "options_example"  --chain arbitrum --account /path/to/signer --network testnet --programId $SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET
+...
+export FUNCTION_ID=<YOUR FUNCTION ID>
+sb evm routine create $FUNCTION_ID --chain $CHAIN --schedule "*/10 * * * * *" --account /path/to/keypair --network $CLUSTER --programId $SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET --params="YOUR_CALL_PARAMS"
+...
+export ROUTINE_ID=<YOUR ROUTINE ID>
+sb evm routine fund ${ROUTINE_ID?} --chain $CHAIN --fundAmount 0.01 --account /path/to/keypair --network $CLUSTER --programId $SWITCHBOARD_ADDRESS_ARBITRUM_TESTNET
 ```
 
 ### Printing the state of your callback
@@ -176,7 +173,7 @@ This repo contains an example script to view the current verified deribit implie
 currently in contract:
 
 ```bash
-npx hardhat run --network baseTestnet scripts/get_state.ts
+npx hardhat run --network arbitrumTestnet scripts/get_state.ts
 ```
 
 ## Writing Switchboard Rust Functions
@@ -203,7 +200,7 @@ futures = "0.3"
 
 # at a minimum you'll need to include the following packages
 ethers = { version = "2.0.7", features = ["legacy"] }
-switchboard-evm = "0.3.21"
+switchboard-evm = "0.5.0"
 ```
 
 ### Minimal Switchboard Function
@@ -211,46 +208,63 @@ switchboard-evm = "0.3.21"
 main.rs
 
 ```rust
+use ethers::prelude::*;
 use ethers::{
-    prelude::{abigen, SignerMiddleware, ContractCall},
+    prelude::{abigen, SignerMiddleware},
     providers::{Http, Provider},
-    types::{U256},
+    types::Address,
 };
-use rand;
-use std::sync::Arc;
-use std::time::{SystemTime, Duration};
-use switchboard_evm::{
-    sdk::{EVMFunctionRunner, EVMMiddleware},
-};
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+use futures::TryFutureExt;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
+use serde::Deserialize;
+use switchboard_evm::sdk::EVMFunctionRunner;
+use switchboard_evm::*;
+pub use switchboard_utils::reqwest;
 
-// define the abi for the functions in the contract you'll be calling
-// -- here it's just a function named "callback", expecting a random u256
-abigen!(
-    Receiver,
-    r#"[
-        function callback(uint256)
-    ]"#,
-);
+abigen!(Receiver, r#"[ function callback(int256, uint256) ]"#,);
+static CLIENT_URL: &str = "https://goerli-rollup.arbitrum.io/rpc";
+static RECEIVER: &str = env!("CALLBACK_ADDRESS");
 
-#[tokio::main(worker_threads = 12)]
-async fn main() -> Result<()> {
-    // generate a random number U256. The sgx runtime will source this randomness
-    // securely from the enclave.
-    let random: [u64; 4] = rand::random();
-    let random = U256(random);
+#[derive(Debug, Deserialize)]
+pub struct DeribitRespnseInner {
+    pub mark_iv: f64,
+    pub timestamp: u64,
+}
+#[derive(Debug, Deserialize)]
+pub struct DeribitResponse {
+    pub result: DeribitRespnseInner,
+}
 
-    let function_runner = EVMFunctionRunner::new()?;
-    let receiver: Address = env!("EXAMPLE_PROGRAM").parse()?;
-    let provider = Provider::<Http>::try_from(DEFAULT_URL)?;
-    let signer = function_runner.enclave_wallet.clone();
-    let client = SignerMiddleware::new_with_provider_chain(provider, signer).await?;
+#[sb_function(expiration_seconds = 120, gas_limit = 5_500_000)]
+async fn sb_function<M: Middleware, S: Signer>(
+    client: SignerMiddleware<M, S>,
+    _: NoParams,
+) -> Result<Vec<FnCall<M, S>>, Error> {
+    let receiver: Address = RECEIVER.parse().map_err(|_| Error::ParseError)?;
     let receiver_contract = Receiver::new(receiver, client.into());
+
+    // --- Logic Below ---
+    let url = "https://www.deribit.com/api/v2/public/get_order_book?instrument_name=ETH-29SEP23-2000-C";
+    let derebit_response: DeribitResponse = reqwest::get(url)
+        .and_then(|r| r.json())
+        .await
+        .map_err(|_| Error::FetchError)?;
+
+    let timestamp = derebit_response.result.timestamp.into();
+    let mut mark_iv =
+        Decimal::from_f64(derebit_response.result.mark_iv).ok_or(Error::ParseError)?;
+    mark_iv.rescale(8);
+    let callback = receiver_contract.callback(mark_iv.mantissa().into(), timestamp);
+
     // --- Send the callback to the contract with Switchboard verification ---
-    let callback = receiver_contract.callback(lower_bound_median.mantissa().into());
-    let expiration = (Utc::now().timestamp() + 120).into();
-    let gas_limit = 5_500_000.into();
-    function_runner.emit(receiver, expiration, gas_limit, vec![callback])?;
+    Ok(vec![callback])
+}
+
+#[sb_error]
+enum Error {
+    ParseError = 1,
+    FetchError,
 }
 ```
 
@@ -261,8 +275,7 @@ We can't guarantee that the function will run on the blockchain, but we can test
 Run the following to test your function:
 
 ```bash
-export EXAMPLE_PROGRAM=${SWITCHBOARD_ADDRESS?} # can be any valid address
-cargo test -- --nocapture # Note: this will include a warning about a missing quote which can be safely ignored.
+sb evm function test --parameters PID=Dee8DJ9wEUf7AcqUwjK3ENtrwxZ9YNXifR1B3ipcGzVQ,REQUEST=Dee8DJ9wEUf7AcqUwjK3ENtrwxZ9YNXifR1B3ipcGzVQ --chain arbitrum --network testnet
 ```
 
 Successful output:
@@ -288,41 +301,59 @@ In order to do this you'll need to know the switchboard address you're using, an
 
 Recipient.sol
 
-```solidity
-//SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+```sol
 
-import { Recipient } from "./Recipient.sol";
+// Get the Switchboard Library - this is the Core Mainnet Deployment, you can swap this for one of the networks below
+import {SwitchboardCallbackHandler} from "@switchboard-xyz/evm.js/contracts/SwitchboardCallbackHandler.sol";
 
-contract ReceiverExample is Recipient {
-  uint256 public randomValue;
-  address functionId;
+contract Receiver is SwitchboardCallbackHandler {
+    address public switchboard;
+    address public functionID;
 
-  event NewRandomValue(uint256 value);
+    function callback(
+        int256 data,
+        uint256 timestamp
+    ) external isSwitchboardCaller isFunctionId {
+        // Set function id on first callback
+        address _functionId = getEncodedFunctionId();
+        if (functionId == address(0)) {
+            functionId = _functionId;
+        }
 
-  constructor(
-    address _switchboard // Switchboard contract address
-  ) Recipient(_switchboard) {}
-
-  function callback(uint256 value) external {
-    // extract the sender from the callback, this validates that the switchboard contract called this function
-    address msgSender = getEncodedFunctionId();
-
-    if (functionId == address(0)) {
-      // set the functionId if it hasn't been set yet
-      functionId = msgSender;
+        ReceiverLib.callback(data, timestamp);
     }
 
-    // make sure the encoded caller is our function id
-    if (msgSender != functionId) {
-      revert("Invalid sender");
+    function viewData() external view returns (int256, uint256) {
+        return ReceiverLib.viewData();
     }
 
-    // set the random value
-    randomValue = value;
+    // SwitchboardCallbackHandler functions integrated below
 
-    // emit an event
-    emit NewRandomValue(value);
-  }
+    function getSwithboardAddress() internal view override returns (address) {
+        return switchboard;
+    }
+
+    function getSwitchboardFunctionId()
+        internal
+        view
+        override
+        returns (address)
+    {
+        return functionId;
+    }
+
+    // Our own function to get the encoded function id manually
+
+    function getEncodedFunctionId() internal pure returns (address) {
+        if (msg.data.length < 20) {
+            revert SwitchboardCallbackHandler__MissingFunctionId();
+        }
+
+        address receivedFunctionId;
+        assembly {
+            receivedFunctionId := shr(96, calldataload(sub(calldatasize(), 20)))
+        }
+        return receivedFunctionId;
+    }
 }
 ```

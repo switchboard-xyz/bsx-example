@@ -67,19 +67,4 @@ library AdminLib {
     function setFunctionId(address _functionId) internal {
         diamondStorage().functionId = _functionId;
     }
-
-    // check that switchboard is the forwarder
-    // check that the correct functionId is sending the data
-    function getEncodedFunctonId() internal view returns (address payable signer) {
-        signer = payable(msg.sender);
-
-        // require that the forwarder be switchboard
-        if (msg.data.length >= 20 && signer == switchboard()) {
-            assembly {
-                signer := shr(96, calldataload(sub(calldatasize(), 20)))
-            }
-        } else {
-            revert("No Encoded Id");
-        }
-    }
 }
