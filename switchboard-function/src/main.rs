@@ -27,8 +27,8 @@ use switchboard_evm::sdk::EvmFunctionRunner;
 // SwitchboardPushReceiver/artifacts/contracts/src/SwitchboardPushReceiver/Receiver/Receiver.sol/Receiver.json
 abigen!(Receiver, "./src/abi/Receiver.json",);
 
-static CLIENT_URL: &str = "https://goerli.optimism.io";
-static RECEIVER: &str = env!("SWITCHBOARD_PUSH_ADDRESS");
+static CLIENT_URL: &str = env!("RPC_URL")
+static RECEIVER: &str = env!("RECEIVER_ADDRESS");
 
 #[sb_error]
 enum SbError {
@@ -108,7 +108,7 @@ async fn sb_function(
     }
 
     for (key, value) in feed_updates {
-        
+
         // only use the first 30 elements of the feed_updates
         // -- this is to prevent the transaction from going over the gas limit
         if feed_names.len() >= 20 && registering_feeds {
@@ -150,6 +150,6 @@ mod tests {
 
     #[tokio::test]
     async fn test() {
-
+        let 
     }
 }

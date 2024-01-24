@@ -1,8 +1,10 @@
 fn main() {
-    println!("cargo:rerun-if-env-changed=EXAMPLE_PROGRAM");
-    // Read the environment variable
-    let value = std::env::var("EXAMPLE_PROGRAM").expect("EXAMPLE_PROGRAM must be set");
+    println!("cargo:rerun-if-env-changed=RECEIVER_ADDRESS");
+    println!("cargo:rerun-if-env-changed=RPC_URL");
 
-    // Pass it to the Rust compiler
-    println!("cargo:rustc-env=EXAMPLE_PROGRAM={}", value);
+    let value = std::env::var("RECEIVER_ADDRESS").expect("RECEIVER_ADDRESS must be set");
+    println!("cargo:rustc-env=RECEIVER_ADDRESS={}", value);
+
+    let value = std::env::var("RPC_URL").expect("RPC_URL must be set");
+    println!("cargo:rustc-env=RPC_URL={}", value);
 }
