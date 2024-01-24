@@ -227,7 +227,7 @@ pub async fn get_prices() -> HashMap<[u8; 32], I256> {
     // println!("{:#?}", aggregates);
     // println!("{:#?}", aggregates.len());
 
-    let mut feed_map = HashMap::<[u8; 32], Decimal>::new();
+    let mut feed_map = HashMap::<[u8; 32], I256>::new();
 
     // go through each pair and calculate the average
     for (k, v) in aggregates {

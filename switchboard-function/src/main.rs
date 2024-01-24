@@ -27,7 +27,7 @@ use switchboard_evm::sdk::EvmFunctionRunner;
 // SwitchboardPushReceiver/artifacts/contracts/src/SwitchboardPushReceiver/Receiver/Receiver.sol/Receiver.json
 abigen!(Receiver, "./src/abi/Receiver.json",);
 
-static CLIENT_URL: &str = env!("RPC_URL")
+static CLIENT_URL: &str = env!("RPC_URL");
 static RECEIVER: &str = env!("RECEIVER_ADDRESS");
 
 #[sb_error]
@@ -64,8 +64,8 @@ async fn sb_function(
         feed_map.insert(feed.feed_name, feed.latest_result.value);
     }
 
-    // get fresh feed data
-    let mut feed_updates = get_feed_data().await;
+    // get fresh prices
+    let mut feed_updates = get_prices().await;
 
     // check if we're still registering feeds (significantly more expensive in gas cost)
     // -- if so, only use the first 20 elements of the feed_updates
@@ -147,9 +147,16 @@ fn get_percentage_diff(a: I256, b: I256) -> Decimal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use exchange_api::*;
 
     #[tokio::test]
     async fn test() {
-        let 
+        let mut feed_updates = get_prices().await;
+        for (key, value) in feed_updates.clone() {
+            println!("{}: {}", String::from_utf8(key.to_vec()).unwrap(), value);
+        }
+
+
     }
+    
 }
